@@ -96,15 +96,68 @@ impl Emu {
         self.stack[self.sp as usize]
     }
 
+    // Ticks to the next clock cycle.
     pub fn tick(&mut self) {
-        // Fetch
+        // Fetch: Retrieves opcode to be executed
         let op = self.fetch();
-        // Decode
-        // Execute
+        // Decode & Execute
+        self.execute(op);
     }
 
-    fn fetch(&mut self) {
-        
+    fn execute(&mut self, op: u16) {
+        // Separate each hex digit
+        let digit1 = (op & 0xF000) >> 12;
+        let digit2 = (op & 0x0F00) >> 8;
+        let digit3 = (op & 0x00F0) >> 4;
+        let digit4 = op & 0x000F;
+
+        match (digit1, digit2, digit3, digit4) {
+            // NOP: Moves to next opcode, sometimes necessary for timing or alignment
+            (0, 0, 0, 0) => return,
+            
+            // CLS: Clear Screen
+            (0, 0, 0xE, 0) => {
+                self.screen = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
+            },
+
+            // RET: Return from subroutine
+            // A subroutine is like a jump in assembly, we move the PC to a specificed address
+            // and continue exectuion, expect a subroutine is expected to be completed.
+            // We will store the address of the line we want to return to in the stack. The stack also
+            // allows us to have nested subroutines because we can keep stacking the addresses.
+            (0, 0, 0xE, 0xE) => {
+                let ret_addr = self.pop();
+                self.pc = ret_addr;
+            }
+
+            // Panics when an unimplemented opcode is run
+            (_, _, _, _) => unimplemented!("Unimplemented opcode: {}", op),
+        }
+    }
+
+    // Retreives the next opcode to be executed.
+    fn fetch(&mut self) -> u16 {
+        let higher_byte = self.ram[self.pc as usize] as u16;
+        let lower_byte = self.ram[(self.pc + 1) as usize] as u16;
+        let op = (higher_byte << 8) | lower_byte;
+        self.pc += 2;
+        op
+    }
+
+    // Implementing delay and sound timers. These are updated every frame rather than every cycle
+    // so they need a separate function.
+    pub fn tick_timers(&mut self) {
+        if self.dt > 0 {
+            self.dt -= 1;
+        }
+
+        if self.st > 0 {
+            if self.st == 1 {
+                // BEEP 
+                // NOTE: (audio will not be implemented in this emulator but this is the format)
+            }
+            self.st -= 1;
+        }
     }
 }
 
