@@ -128,6 +128,101 @@ impl Emu {
             (0, 0, 0xE, 0xE) => {
                 let ret_addr = self.pop();
                 self.pc = ret_addr;
+            },
+
+            // 1NNN - Jump
+            // JMP NNN: Moves the PC to given address.
+            (1, _, _, _) => {
+                let nnn = op & 0xFFF; // Cuts down op code to last 3 hex digits
+                self.pc = nnn;
+            },
+
+            // 2NNN - Call Subroutine
+            // CALL NNN
+            // Pushes current PC to stack and then jumps to given address (nnn)
+            (2, _, _, _) => {
+                let nnn = op & 0xFFF;
+                self.push(self.pc);
+                self.pc = nnn;
+            },
+
+            // 3XNN - Skip next if VX == NN
+            // SKIP VX == NN
+            (3, _, _, _) => {
+                let x = digit2 as usize;
+                let nn = (op & 0xFF) as u8;
+                if self.v_reg[x] == nn {
+                    self.pc += 2; // Skips one opcode
+                }
+            },
+
+            // 4XNN - Skip next if VX != NN
+            // SKIP VX != NN
+            (4, _, _, _) => {
+                let x = digit2 as usize;
+                let nn = (op & 0xFF) as u8;
+                if self.v_reg[x] != nn {
+                    self.pc += 2;
+                }
+            },
+
+            // 5XY0 - Skip next if VX == VY
+            // SKIP VX == VY
+            (5, _, _, 0) => {
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                if self.v_reg[x] == self.v_reg[y] {
+                    self.pc += 2;
+                }
+            },
+
+            // 6XNN - VX == NN
+            // VX = NN
+            (6, _, _, _) => {
+                let x = digit2 as usize;
+                let nn = (op & 0xFF) as u8;
+                self.v_reg[x] = nn;
+            },
+
+            // 7XNN - VX += NN
+            // VX = VX + NN
+            (7, _, _, _) => {
+                let x = digit2 as usize;
+                let nn = (op & 0xFF) as u8;
+                self.v_reg[x] = self.v_reg[x].wrapping_add(nn); // wrapping_add wraps back around to 0 after max is reached
+            }
+
+            // 8XY0 - VX = VY
+            // VX = VY
+            (8, _, _, 0) => {
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                self.v_reg[x] = self.v_reg[y];
+            }
+
+            // 8XY1, 8XY2, 8XY3 - Bitwise Operations
+            // 8XY1 - Bitwise OR
+            // VX |= VY
+            (8, _, _, 1) => {
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                self.v_reg[x] |= self.v_reg[y];
+            }
+
+            // 8XY2 - Bitwise OR
+            // VX &= VY
+            (8, _, _, 2) => {
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                self.v_reg[x] &= self.v_reg[y];
+            }
+
+            // 8XY3 - Bitwise OR
+            // VX ^= VY
+            (8, _, _, 3) => {
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                self.v_reg[x] ^= self.v_reg[y];
             }
 
             // Panics when an unimplemented opcode is run
@@ -137,9 +232,13 @@ impl Emu {
 
     // Retreives the next opcode to be executed.
     fn fetch(&mut self) -> u16 {
+        // Gets left two hex values from first RAM index
         let higher_byte = self.ram[self.pc as usize] as u16;
+        // Gets right two hex values from second RAM index
         let lower_byte = self.ram[(self.pc + 1) as usize] as u16;
+        // Shifts left byte to the left hand side and bitwise or to include right side
         let op = (higher_byte << 8) | lower_byte;
+        // Increments PC counter by 2
         self.pc += 2;
         op
     }
